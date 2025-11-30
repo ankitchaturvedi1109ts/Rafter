@@ -37,6 +37,29 @@
       gap: 16px;
     }
 
+    .filters {
+      padding: 0 28px 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 14px;
+    }
+
+    .filters select {
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: white;
+      font-size: 14px;
+    }
+
+    .showing-count {
+      flex-basis: 100%;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
     h1 {
       margin: 0;
       font-size: 24px;
@@ -163,6 +186,18 @@
     <span id="status"></span>
   </header>
 
+  <section class="filters">
+    <label for="stageFilter">Stage</label>
+    <select id="stageFilter" aria-label="Stage filter">
+      <option value="All">All</option>
+      <option value="New">New</option>
+      <option value="In Progress">In Progress</option>
+      <option value="Escalated">Escalated</option>
+      <option value="Resolved">Resolved</option>
+    </select>
+    <div id="showingCount" class="showing-count"></div>
+  </section>
+
   <div id="summary" class="summary-strip"></div>
 
   <main>
@@ -172,11 +207,15 @@
   <script>
     const stageColors = {
       default: 'var(--stage-default)',
+      New: 'var(--stage-default)',
       'Not Started': 'var(--stage-default)',
       'In Progress': 'var(--stage-progress)',
+      Escalated: 'var(--severity-high)',
       'Completed': 'var(--stage-done)',
       'Resolved': 'var(--stage-done)'
     };
+
+    let allCards = [];
 
     const severityColors = {
       Low: 'var(--severity-low)',
@@ -196,17 +235,39 @@
 
       google.script.run
         .withSuccessHandler(({ cards, stageCounts }) => {
+          allCards = Array.isArray(cards) ? cards : [];
           renderSummary(stageCounts || {});
-          renderCards(Array.isArray(cards) ? cards : []);
+          applyFilters();
           setStatus('Updated');
           btn.disabled = false;
         })
         .withFailureHandler(err => {
           console.error(err);
           setStatus('Error loading data');
+          allCards = [];
+          applyFilters();
           btn.disabled = false;
         })
         .getDashboardData();
+    }
+
+    function applyFilters() {
+      const selectEl = document.getElementById('stageFilter');
+      const selectedStage = selectEl ? selectEl.value : 'All';
+      const filteredCards = selectedStage === 'All'
+        ? allCards
+        : allCards.filter(card => (card.Stage || '') === selectedStage);
+
+      renderCards(filteredCards);
+      renderShowingCount(filteredCards.length, allCards.length);
+    }
+
+    function renderShowingCount(showing, total) {
+      const countEl = document.getElementById('showingCount');
+      if (!countEl) return;
+      const safeShowing = Number.isFinite(showing) ? showing : 0;
+      const safeTotal = Number.isFinite(total) ? total : 0;
+      countEl.textContent = `Showing ${safeShowing} of ${safeTotal} tickets`;
     }
 
     function renderSummary(stageCounts) {
@@ -281,7 +342,13 @@
       });
     }
 
-    document.addEventListener('DOMContentLoaded', refreshDashboard);
+    document.addEventListener('DOMContentLoaded', () => {
+      const selectEl = document.getElementById('stageFilter');
+      if (selectEl) {
+        selectEl.addEventListener('change', applyFilters);
+      }
+      refreshDashboard();
+    });
   </script>
 </body>
 </html>
